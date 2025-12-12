@@ -1,22 +1,53 @@
-import React, { useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ResearchGoal, FieldOfStudy, AnalysisRequest } from '../types';
 import { EXAMPLE_SCENARIO } from '../constants';
 
 interface InputPanelProps {
   isLoading: boolean;
   onRequestAnalysis: (data: AnalysisRequest) => void;
+  initialValues?: AnalysisRequest | null;
 }
 
-export const InputPanel: React.FC<InputPanelProps> = ({ isLoading, onRequestAnalysis }) => {
+export const InputPanel: React.FC<InputPanelProps> = ({ isLoading, onRequestAnalysis, initialValues }) => {
   const [goal, setGoal] = React.useState<ResearchGoal>(ResearchGoal.STRENGTHEN_PAPER);
   const [field, setField] = React.useState<FieldOfStudy>(FieldOfStudy.PHYSICS_ENG);
   const [hypothesis, setHypothesis] = React.useState<string>("");
   const [files, setFiles] = React.useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Restore values when history item is selected
+  useEffect(() => {
+    if (initialValues) {
+      setGoal(initialValues.goal);
+      setField(initialValues.field);
+      setHypothesis(initialValues.hypothesis);
+      setFiles(initialValues.files); // Note: File objects persist in memory for the session
+    }
+  }, [initialValues]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setFiles(Array.from(e.target.files));
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files);
+      // Append new files, avoiding duplicates by name/size for basic hygiene, limit to 10
+      setFiles(prev => {
+        const combined = [...prev, ...newFiles];
+        // Basic dedup
+        const unique = combined.filter((file, index, self) =>
+          index === self.findIndex((f) => (
+            f.name === file.name && f.size === file.size
+          ))
+        );
+        return unique.slice(0, 10);
+      });
     }
+    // Reset input so the same file can be selected again if needed
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removeFile = (indexToRemove: number) => {
+    setFiles(prev => prev.filter((_, index) => index !== indexToRemove));
   };
 
   const handleLoadExample = () => {
@@ -91,11 +122,17 @@ export const InputPanel: React.FC<InputPanelProps> = ({ isLoading, onRequestAnal
           />
         </div>
 
-        {/* File Upload */}
+        {/* File Upload Area */}
         <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
-            Attach Evidence (PDFs, Images)
-          </label>
+          <div className="flex justify-between items-end mb-1">
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Attach Evidence
+            </label>
+            <span className="text-[10px] text-gray-400">
+              {files.length}/10 files
+            </span>
+          </div>
+          
           <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50 transition-colors relative">
             <div className="space-y-1 text-center">
               <svg className="mx-auto h-8 w-8 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
@@ -103,23 +140,57 @@ export const InputPanel: React.FC<InputPanelProps> = ({ isLoading, onRequestAnal
               </svg>
               <div className="text-sm text-gray-600">
                 <label htmlFor="file-upload" className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none">
-                  <span>Upload a file</span>
-                  <input id="file-upload" name="file-upload" type="file" className="sr-only" multiple onChange={handleFileChange} accept="image/*,application/pdf" />
+                  <span>Upload files</span>
+                  <input 
+                    id="file-upload" 
+                    ref={fileInputRef}
+                    name="file-upload" 
+                    type="file" 
+                    className="sr-only" 
+                    multiple 
+                    onChange={handleFileChange} 
+                    accept="image/*,application/pdf" 
+                  />
                 </label>
                 <p className="pl-1 inline">or drag and drop</p>
               </div>
-              <p className="text-xs text-gray-500">PNG, JPG, PDF up to 10MB</p>
+              <p className="text-xs text-gray-500">PDFs, Images, Graphs (Max 10)</p>
             </div>
-            {files.length > 0 && (
-              <div className="absolute inset-0 bg-white bg-opacity-90 flex items-center justify-center rounded-md">
-                 <span className="text-sm font-semibold text-green-600">{files.length} file(s) selected</span>
-              </div>
-            )}
           </div>
+
+          {/* File List */}
+          {files.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {files.map((file, idx) => (
+                <div key={idx} className="flex items-center justify-between bg-blue-50 px-3 py-2 rounded-md border border-blue-100 group">
+                  <div className="flex items-center gap-2 overflow-hidden">
+                    <span className="text-lg">📄</span>
+                    <div className="flex flex-col min-w-0">
+                      <span className="text-xs font-medium text-blue-900 truncate block max-w-[180px]" title={file.name}>
+                        {file.name}
+                      </span>
+                      <span className="text-[10px] text-blue-500">
+                        {(file.size / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeFile(idx)}
+                    className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Actions */}
-        <div className="space-y-3 pt-2">
+        <div className="space-y-3 pt-2 mt-auto">
           <button 
             type="submit"
             disabled={isLoading}

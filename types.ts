@@ -31,3 +31,11 @@ export interface RevisionNote {
   text: string;
   checked: boolean;
 }
+
+export interface HistoryItem {
+  id: string;
+  request: AnalysisRequest;
+  response: AnalysisResponse;
+  revisionNotes: string | null;
+  timestamp: number;
+}
